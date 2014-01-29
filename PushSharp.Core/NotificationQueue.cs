@@ -6,31 +6,25 @@ namespace PushSharp.Core
 {
 	public class NotificationQueue
 	{
-		public NotificationQueue ()
+		public NotificationQueue()
 		{
-			notifications = new List<INotification> ();
-			lockObj = new object ();
+			notifications = new LinkedList<INotification>();
+			lockObj = new object();
 		}
 
-		object lockObj;
-		List<INotification> notifications;
+		private readonly object lockObj;
+		private readonly LinkedList<INotification> notifications;
 
 		public void Enqueue(INotification notification)
 		{
 			lock (lockObj)
-				notifications.Add (notification);
+				notifications.AddLast(notification);
 		}
 
 		public void EnqueueAtStart(INotification notification)
 		{
-			lock(lockObj)
-				notifications.Insert(0, notification);
-		}
-
-		public void EnqueueAt(INotification notification, int index = 0)
-		{
-			lock(lockObj)
-				notifications.Insert (index, notification);
+			lock (lockObj)
+				notifications.AddFirst(notification);
 		}
 
 		public INotification Dequeue()
@@ -41,8 +35,8 @@ namespace PushSharp.Core
 			{
 				if (notifications.Count > 0)
 				{
-					n = notifications [0];
-					notifications.RemoveAt (0);
+					n = notifications.First.Value;
+					notifications.RemoveFirst();
 				}
 			}
 
@@ -51,7 +45,7 @@ namespace PushSharp.Core
 
 		public int Count
 		{
-			get 
+			get
 			{
 				lock (lockObj)
 					return notifications.Count;
