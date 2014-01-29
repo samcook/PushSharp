@@ -64,8 +64,8 @@ namespace PushSharp.Core
 		List<ChannelWorker> channels = new List<ChannelWorker>();
 		NotificationQueue queuedNotifications;
 		CancellationTokenSource cancelTokenSource = new CancellationTokenSource();
-		List<WaitTimeMeasurement> measurements = new List<WaitTimeMeasurement>();
-        List<WaitTimeMeasurement> sendTimeMeasurements = new List<WaitTimeMeasurement>();
+		Queue<WaitTimeMeasurement> measurements = new Queue<WaitTimeMeasurement>();
+        Queue<WaitTimeMeasurement> sendTimeMeasurements = new Queue<WaitTimeMeasurement>();
 		DateTime lastNotificationQueueTime = DateTime.MinValue;
 		long trackedNotificationCount = 0;
 
@@ -316,11 +316,15 @@ namespace PushSharp.Core
 				lock (measurementsLock)
 				{
 					//Remove old measurements
-                    while (measurements.Count > 1000)
-                        measurements.RemoveAt(0);
+					var oldMeasurementThreshold = DateTime.UtcNow.AddSeconds(-30);
 
-                    measurements.RemoveAll(m => m.Timestamp < DateTime.UtcNow.AddSeconds(-30));
-                    
+					while (measurements.Count > 1000 ||
+					       (measurements.Count > 0 &&
+					        measurements.Peek().Timestamp < oldMeasurementThreshold))
+					{
+						measurements.Dequeue();
+					}
+
 					//If there aren't even 20 measurements, there's not really any waiting happening so don't scale up!
 					if (measurements.Count < 20)
 						return TimeSpan.Zero;
@@ -341,12 +345,17 @@ namespace PushSharp.Core
 
                 lock (sendTimeMeasurementsLock)
                 {
-                    while (sendTimeMeasurements.Count > 1000)
-                        sendTimeMeasurements.RemoveAt(0);
+					//Remove old measurements
+					var oldMeasurementThreshold = DateTime.UtcNow.AddSeconds(-30);
 
-                    sendTimeMeasurements.RemoveAll(m => m.Timestamp < DateTime.UtcNow.AddSeconds(-30));
+	                while (sendTimeMeasurements.Count > 1000 ||
+	                       (sendTimeMeasurements.Count > 0 &&
+	                        sendTimeMeasurements.Peek().Timestamp < oldMeasurementThreshold))
+	                {
+		                sendTimeMeasurements.Dequeue();
+	                }
 
-                    var avg = from s in sendTimeMeasurements select s.Milliseconds;
+	                var avg = from s in sendTimeMeasurements select s.Milliseconds;
 					
 	                try { return TimeSpan.FromMilliseconds(avg.Average()); }
                     catch { return TimeSpan.Zero; }
@@ -462,7 +471,7 @@ namespace PushSharp.Core
 
 				lock (measurementsLock)
 				{
-					measurements.Add(new WaitTimeMeasurement((long) msWaited));
+					measurements.Enqueue(new WaitTimeMeasurement((long) msWaited));
 				}
 
 				//Log.Info("Waited: {0} ms", msWaited);
@@ -484,7 +493,7 @@ namespace PushSharp.Core
 
                         lock (sendTimeMeasurementsLock)
                         {
-                            sendTimeMeasurements.Add(new WaitTimeMeasurement((long)sendTime.TotalMilliseconds));
+                            sendTimeMeasurements.Enqueue(new WaitTimeMeasurement((long)sendTime.TotalMilliseconds));
                         }
 
 						//Log.Info("Send Time: " + sendTime.TotalMilliseconds + " ms");
